@@ -1,0 +1,172 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id            String            @id @default(uuid())
+  email         String            @unique
+  name          String?
+  avatarUrl     String?
+  role          String            @default("free") // free | creator | agency | admin
+  authProvider  String?           // clerk | supabase
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  workspaces    Workspace[]
+  workspaceMembers WorkspaceMember[]
+  projects      Project[]
+  videos        Video[]
+  billings      Billing[]
+  usageLogs     UsageLog[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id        String            @id @default(uuid())
+  name      String
+  ownerId   String
+  owner     User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  plan      String            @default("free")
+  createdAt DateTime          @default(now())
+  members   WorkspaceMember[]
+  projects  Project[]
+  billings  Billing[]
+  usageLogs UsageLog[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberRole  String    @default("member") // owner | admin | member
+
+  @@id([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
+  title       String
+  createdAt   DateTime  @default(now())
+  videos      Video[]
+
+  @@map("projects")
+}
+
+model Video {
+  id          String       @id @default(uuid())
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id])
+  sourceUrl   String
+  platform    String       // youtube | instagram | tiktok | facebook | other
+  externalId  String?
+  title       String?
+  durationSec Int?
+  metadata    String?      // Stored as JSON string
+  createdAt   DateTime     @default(now())
+  transcripts Transcript[]
+
+  @@map("videos")
+}
+
+model Transcript {
+  id        String        @id @default(uuid())
+  videoId   String
+  video     Video         @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  language  String?
+  source    String?       // captions | whisper
+  segments  String?       // JSON string
+  fullText  String?
+  createdAt DateTime      @default(now())
+  analyses  AIAnalysis[]
+
+  @@map("transcripts")
+}
+
+model AIAnalysis {
+  id           String            @id @default(uuid())
+  transcriptId String
+  transcript   Transcript        @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  viralScore   Int?
+  subScores    String?           // JSON string
+  insights     String?           // JSON string
+  modelVersion String?
+  createdAt    DateTime          @default(now())
+  scripts      GeneratedScript[]
+
+  @@map("ai_analyses")
+}
+
+model GeneratedScript {
+  id          String     @id @default(uuid())
+  analysisId  String
+  analysis    AIAnalysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  style       String?    // educational | storytelling | viral | ...
+  intensity   String?    // light | medium | aggressive | viral
+  language    String?
+  content     String?
+  hooks       String?    // JSON string
+  ctas        String?    // JSON string
+  originality Float?     // dissimilarity vs source
+  createdAt   DateTime   @default(now())
+
+  @@map("generated_scripts")
+}
+
+model SubscriptionPlan {
+  id           String   @id @default(uuid())
+  code         String   @unique // free | creator | agency
+  name         String?
+  priceMonthly Float?
+  priceAnnual  Float?
+  currency     String   @default("USD")
+  limits       String?  // JSON string
+
+  @@map("subscription_plans")
+}
+
+model Billing {
+  id                String     @id @default(uuid())
+  userId            String?
+  user              User?      @relation(fields: [userId], references: [id])
+  workspaceId       String?
+  workspace         Workspace? @relation(fields: [workspaceId], references: [id])
+  provider          String?    // stripe | razorpay
+  providerCustomer  String?
+  planCode          String?
+  status            String?    // active | past_due | canceled
+  currentPeriodEnd  DateTime?
+  createdAt         DateTime   @default(now())
+
+  @@map("billing")
+}
+
+model UsageLog {
+  id           String     @id @default(uuid())
+  userId       String?
+  user         User?      @relation(fields: [userId], references: [id])
+  workspaceId  String?
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id])
+  action       String?    // transcript | analysis | rewrite | hook | cta | export
+  tokensUsed   Int?
+  costEstimate Float?
+  createdAt    DateTime   @default(now())
+
+  @@map("usage_logs")
+}
